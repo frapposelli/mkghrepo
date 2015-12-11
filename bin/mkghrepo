@@ -1,0 +1,20 @@
+#!/usr/bin/env ruby
+require 'mkghrepo'
+
+# Instantiate new cli object.
+cli = Mkghrepo::CLI.new
+
+# Parse CLI options.
+opts = cli.parse_options
+
+# Log into Github and get a client
+client = Mkghrepo::Repo.new(opts[:token])
+
+# Main entrypoint into the actual program.
+if opts.arguments.length < 1
+  # If no file arguments, start processing standard input.
+  cli.process_stdin(client, opts)
+else
+  # If file argument is present, take the first one and parse it.
+  cli.process_file(opts.arguments[0], client, opts)
+end
