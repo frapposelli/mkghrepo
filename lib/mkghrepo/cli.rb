@@ -132,7 +132,7 @@ module Mkghrepo
     def process_team(client, repo, users)
       team = create_team(client, repo)
       users.each do |user|
-        add_user_to_team(client, user, team.id)
+        add_user_to_team(client, user, team.id) if team.respond_to? :id
       end
     end
 
