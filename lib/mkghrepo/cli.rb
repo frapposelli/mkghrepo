@@ -40,8 +40,11 @@ module Mkghrepo
                default: false
         o.bool '-t',
                '--create-team',
-               'creates a team called "<foo>-write", default is false',
+               'creates a team called "<repo>", default is false',
                default: false
+        o.string '-ts',
+                 '--team-suffix',
+                 'adds a suffix to the team name, "<repo>-<team-suffix>"'
         o.string '--token',
                  'sets github token, defaults from GITHUB_TOKEN',
                  default: ENV['GITHUB_TOKEN']
@@ -88,7 +91,7 @@ module Mkghrepo
       File.open(file, 'r') do |f|
         f.each_line do |a|
           # Treat each line as a separate repo
-          process_lines(a, client, opts[:private], opts[:create_team])
+          process_lines(a, client, opts)
         end
       end
     end
@@ -100,7 +103,7 @@ module Mkghrepo
       begin
         STDIN.read.split("\n").each do |a|
           # Treat each line as a separate repo
-          process_lines(a, client, opts[:private], opts[:create_team])
+          process_lines(a, client, opts)
         end
       rescue Interrupt
         # Trap a CTRL+C event and exit gracefully
@@ -109,7 +112,7 @@ module Mkghrepo
       end
     end
 
-    def process_lines(line, client, private, create_team)
+    def process_lines(line, client, opts)
       # Split the line using space as delimiter, format is:
       # <org>/<repo> <user1> <user2> ... <userN>
       #  or
@@ -117,20 +120,20 @@ module Mkghrepo
       @logger.debug("processing #{line.strip}")
       matches = line.split(' ')
       repo = matches[0]
-      create_repo(client, repo, private)
+      create_repo(client, repo, opts)
 
       # If no users are specified or create_team was not enabled
-      return if matches.length < 2 || create_team == false
+      return if matches.length < 2 || opts[:create_team] == false
       # create team and whatever
       if repo.include? '/'
-        process_team(client, repo, matches[1..matches.count])
+        process_team(client, repo, matches[1..matches.count], opts)
       else
         @logger.warn("Not creating Team for #{repo}, only orgs support teams")
       end
     end
 
-    def process_team(client, repo, users)
-      team = create_team(client, repo)
+    def process_team(client, repo, users, opts)
+      team = create_team(client, repo, opts)
       users.each do |user|
         add_user_to_team(client, user, team.id) if team.respond_to? :id
       end
@@ -152,17 +155,21 @@ module Mkghrepo
       end
     end
 
-    def create_repo(client, repo, private)
+    def create_repo(client, repo, opts)
       @logger.debug("Creating repo named: #{repo}")
-      client.create_repo(repo, private)
+      client.create_repo(repo, opts[:private])
     rescue Octokit::Error => e
       parse_error(repo, e)
     else
       @logger.info("Succesfully created repository: #{repo}")
     end
 
-    def create_team(client, repo)
-      team_name = repo.rpartition('/').last + '-write'
+    def create_team(client, repo, opts)
+      if opts[:team_suffix]
+        team_name = repo.rpartition('/').last + '-' + opts[:team_suffix]
+      else
+        team_name = repo.rpartition('/').last
+      end
       @logger.debug("Creating team named: #{team_name}")
       team = client.create_team(repo, team_name, 'push')
     rescue Octokit::Error => e
